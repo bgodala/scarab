@@ -101,7 +101,7 @@ typedef struct Icache_Data_struct {
 /**************************************************************************************/
 /* Global Variables */
 
-Pb_Data* ic_pb_data;  // cmp cne is fine for cmp now assuming homogeneous cmp
+//static Pb_Data* ic_pb_data;  // cmp cne is fine for cmp now assuming homogeneous cmp
 // But decided to use array for future use
 
 

@@ -66,6 +66,7 @@
 /* Global Variables */
 
 Icache_Stage* ic = NULL;
+Pb_Data* ic_pb_data;  // cmp cne is fine for cmp now assuming homogeneous cmp
 
 extern Cmp_Model              cmp_model;
 extern Memory*                mem;

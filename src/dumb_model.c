@@ -44,6 +44,8 @@
 #include "general.param.h"
 #include "memory/memory.param.h"
 
+//Global vars
+Dumb_Model        dumb_model;
 
 /**************************************************************************************/
 /* Types */
