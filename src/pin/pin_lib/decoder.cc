@@ -85,10 +85,10 @@ std::vector<PIN_MEM_ACCESS_INFO> compute_mem_access_infos(
 ADDRDELTA compute_base_reg_addr_contribution(const CONTEXT*       ctxt,
                                              gather_scatter_info* info);
 ADDRDELTA compute_base_index_addr_contribution(
-  const PIN_REGISTER& vector_index_reg_val, const UINT32 lane_id,
+  const UINT64* vector_index_reg_val, const UINT32 lane_id,
   gather_scatter_info* info);
 PIN_MEMOP_ENUM type_to_PIN_MEMOP_ENUM(gather_scatter_info* info);
-bool extract_mask_on(const PIN_REGISTER& mask_reg_val_buf, const UINT32 lane_id,
+bool extract_mask_on(const UINT64* mask_reg_val_buf, const UINT32 lane_id,
                      gather_scatter_info* info);
 
 /**************************** Public Functions ********************************/
@@ -112,8 +112,8 @@ void pin_decoder_insert_analysis_functions(const INS& ins) {
   info->instruction_addr = INS_Address(ins);
   // Note: should be overwritten for a taken control flow instruction
   info->instruction_next_addr = INS_NextAddress(ins);
-  if(INS_IsDirectBranchOrCall(ins)) {
-    info->branch_target = INS_DirectBranchOrCallTargetAddress(ins);
+  if(INS_IsDirectControlFlow(ins)) {
+    info->branch_target = INS_DirectControlFlowTargetAddress(ins);
   }
 
   if(INS_IsVgather(ins) || INS_IsVscatter(ins)) {
@@ -421,16 +421,16 @@ vector<PIN_MEM_ACCESS_INFO> compute_mem_access_infos(
                                                                       info);
   PIN_MEMOP_ENUM memop_type      = type_to_PIN_MEMOP_ENUM(info);
 
-  PIN_REGISTER vector_index_reg_val_buf;
+  UINT64 vector_index_reg_val_buf[2];
   assert(reg_xed_to_pin_map.find(info->get_index_reg()) !=
          reg_xed_to_pin_map.end());
   PIN_GetContextRegval(ctxt, reg_xed_to_pin_map[info->get_index_reg()],
-                       (UINT8*)&vector_index_reg_val_buf);
-  PIN_REGISTER mask_reg_val_buf;
+                       (UINT8*)vector_index_reg_val_buf);
+  UINT64 mask_reg_val_buf[2];
   assert(reg_xed_to_pin_map.find(info->get_mask_reg()) !=
          reg_xed_to_pin_map.end());
   PIN_GetContextRegval(ctxt, reg_xed_to_pin_map[info->get_mask_reg()],
-                       (UINT8*)&mask_reg_val_buf);
+                       (UINT8*)mask_reg_val_buf);
   for(UINT32 lane_id = 0; lane_id < info->get_num_mem_ops(); lane_id++) {
     ADDRDELTA index_val = compute_base_index_addr_contribution(
       vector_index_reg_val_buf, lane_id, info);
@@ -454,17 +454,17 @@ ADDRDELTA compute_base_reg_addr_contribution(const CONTEXT*       ctxt,
                                              gather_scatter_info* info) {
   ADDRDELTA base_addr_contribution = 0;
   if(XED_REG_valid(info->get_base_reg())) {
-    PIN_REGISTER buf;
+    UINT64 buf[2];
     ASSERTX(reg_xed_to_pin_map.find(info->get_base_reg()) !=
             reg_xed_to_pin_map.end());
     PIN_GetContextRegval(ctxt, reg_xed_to_pin_map[info->get_base_reg()],
-                         (UINT8*)&buf);
+                         (UINT8*)buf);
     // need to do this to make sure a 32-bit base register holding a negative
     // value is properly sign-extended into a 64-bit ADDRDELTA value
     if(XED_REG_is_gr32(info->get_base_reg())) {
-      base_addr_contribution = buf.s_dword[0];
+      base_addr_contribution = *(UINT32*)buf;
     } else if(XED_REG_is_gr64(info->get_base_reg())) {
-      base_addr_contribution = buf.s_qword[0];
+      base_addr_contribution = *(UINT64*)buf;
     } else {
       ASSERTX(false);
     }
@@ -473,15 +473,15 @@ ADDRDELTA compute_base_reg_addr_contribution(const CONTEXT*       ctxt,
 }
 
 ADDRDELTA compute_base_index_addr_contribution(
-  const PIN_REGISTER& vector_index_reg_val, const UINT32 lane_id,
+  const UINT64* vector_index_reg_val, const UINT32 lane_id,
   gather_scatter_info* info) {
   ADDRDELTA index_val;
   switch(info->get_index_lane_width_bytes()) {
     case 4:
-      index_val = vector_index_reg_val.s_dword[lane_id];
+      index_val = ((UINT32*)vector_index_reg_val)[lane_id];
       break;
     case 8:
-      index_val = vector_index_reg_val.s_qword[lane_id];
+      index_val = ((UINT64*)vector_index_reg_val)[lane_id];
       break;
     default:
       ASSERTX(false);
@@ -502,14 +502,14 @@ PIN_MEMOP_ENUM type_to_PIN_MEMOP_ENUM(gather_scatter_info* info) {
   }
 }
 
-bool extract_mask_on(const PIN_REGISTER& mask_reg_val_buf, const UINT32 lane_id,
+bool extract_mask_on(const UINT64* mask_reg_val_buf, const UINT32 lane_id,
                      gather_scatter_info* info) {
   bool   mask_on  = false;
   UINT64 msb_mask = ((UINT64)1) << (info->get_data_lane_width_bytes() * 8 - 1);
 
   switch(info->get_mask_reg_type()) {
     case gather_scatter_info::K:
-      mask_on = (mask_reg_val_buf.word[0] & (1 << lane_id));
+      mask_on = (((UINT16*)mask_reg_val_buf)[0] & (1 << lane_id));
       break;
     case gather_scatter_info::XYMM:
       // Conditionality is specified by the most significant bit of each data
@@ -517,11 +517,11 @@ bool extract_mask_on(const PIN_REGISTER& mask_reg_val_buf, const UINT32 lane_id,
       // destination register and mask register are identical.
       switch(info->get_data_lane_width_bytes()) {
         case 4:
-          mask_on = (mask_reg_val_buf.dword[lane_id] & msb_mask);
+          mask_on = (((UINT32*)mask_reg_val_buf)[lane_id] & msb_mask);
           break;
 
         case 8:
-          mask_on = (mask_reg_val_buf.qword[lane_id] & msb_mask);
+          mask_on = (((UINT32*)mask_reg_val_buf)[lane_id] & msb_mask);
           break;
 
         default:

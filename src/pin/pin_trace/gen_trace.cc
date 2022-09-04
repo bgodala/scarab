@@ -60,11 +60,11 @@ END_LEGAL */
 #include <string>
 
 #include "control_manager.H"
-#include "instlib.H"
+//#include "instlib.H"
 #include "pin.H"
 #include "pinplay.H"
 
-using namespace INSTLIB;
+//using namespace INSTLIB;
 using namespace CONTROLLER;
 
 #undef UNUSED   // there is a name conflict between PIN and Scarab
@@ -133,7 +133,7 @@ void change_rip(CONTEXT* ctx) {
   PIN_ExecuteAt(ctx);
 }
 
-LOCALFUN VOID Fini(int n, void* v) {
+LOCALCFUN VOID Fini(int n, void* v) {
   pin_decoder_print_unknown_opcodes();
   if(output_stream) {
     if(mailbox_full) {

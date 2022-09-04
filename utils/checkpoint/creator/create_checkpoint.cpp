@@ -202,9 +202,9 @@ void dumpProcessInfo(FILE* out, CONTEXT* ctxt) {
   {
     DEBUG("Dumping standard streams\n");
     startChild(out, "standard_streams");
-    INLINE_CHILD(out, "stdin", "%lu", fileno(stdin));
-    INLINE_CHILD(out, "stdout", "%lu", fileno(stdout));
-    INLINE_CHILD(out, "stderr", "%lu", fileno(stderr));
+    INLINE_CHILD(out, "stdin", "%u", fileno(stdin));
+    INLINE_CHILD(out, "stdout", "%u", fileno(stdout));
+    INLINE_CHILD(out, "stderr", "%u", fileno(stderr));
     endChild(out);
   }
   dumpFDs(out, PIN_GetPid());
@@ -473,7 +473,7 @@ void dumpFDs(FILE* out, UINT pid) {
   for(int i = 0; i < numFds; ++i) {
     if(fcntl(fds[i], F_GETFL, 0) != -1) {
       // valid FD (not related to /proc/pid/fd traversal)
-      if(fileno(out) != fds[i]) {  // not the checkpoint fd
+      if((unsigned long)fileno(out) != fds[i]) {  // not the checkpoint fd
         dumpFdInfo(out, fds[i]);
 
         // ensure the data is out to disk
